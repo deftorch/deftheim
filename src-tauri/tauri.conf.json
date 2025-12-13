@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2.0.0",
-  "productName": "Valheim Mod Manager",
+  "productName": "Deftheim",
   "version": "2.0.0",
-  "identifier": "com.valheim.modmanager",
+  "identifier": "com.deftheim.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
@@ -24,7 +24,7 @@
       "digestAlgorithm": "sha256",
       "timestampUrl": ""
     },
-    "longDescription": "Modern, performant, and user-friendly mod manager for Valheim.",
+    "longDescription": "Modern, performant, and user-friendly mod manager for Valheim by Deftorch.",
     "macOS": {
       "frameworks": [],
       "minimumSystemVersion": "11.0"
@@ -38,7 +38,7 @@
   "app": {
     "windows": [
       {
-        "title": "Valheim Mod Manager",
+        "title": "Deftheim",
         "width": 1280,
         "height": 800,
         "minWidth": 1024,

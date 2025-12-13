@@ -1,10 +1,10 @@
 [package]
-name = "valheim-mod-manager"
+name = "deftheim"
 version = "2.0.0"
 description = "Modern, performant mod manager for Valheim"
-authors = ["Valheim Mod Manager Team"]
+authors = ["deftorch"]
 license = "MIT"
-repository = "https://github.com/yourusername/valheim-mod-manager"
+repository = "https://github.com/deftorch/deftheim"
 edition = "2024"
 rust-version = "1.85"
 

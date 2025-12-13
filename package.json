@@ -1,7 +1,7 @@
 {
-  "name": "valheim-mod-manager",
+  "name": "deftheim",
   "version": "2.0.0",
-  "description": "Modern, performant, and user-friendly mod manager for Valheim",
+  "description": "Modern, performant, and user-friendly mod manager for Valheim by deftorch",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -12,10 +12,10 @@ use tracing_subscriber;
 fn main() {
     // Initialize logging
     tracing_subscriber::fmt()
-        .with_env_filter("valheim_mod_manager=debug,info")
+        .with_env_filter("deftheim=debug,info")
         .init();
 
-    tracing::info!("Starting Valheim Mod Manager v2.0.0");
+    tracing::info!("Starting Deftheim v2.0.0");
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
