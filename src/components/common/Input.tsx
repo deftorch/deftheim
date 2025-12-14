@@ -1,4 +1,4 @@
-import { Component, JSX, splitProps, Show } from "solid-js";
+import { Component, JSX, splitProps, Show, createUniqueId } from "solid-js";
 
 interface InputProps extends JSX.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -19,7 +19,10 @@ export const Input: Component<InputProps> = (props) => {
     "id"
   ]);
 
-  const inputId = () => local.id || `input-${Math.random().toString(36).substr(2, 9)}`;
+  const defaultId = createUniqueId();
+  const inputId = () => local.id || `input-${defaultId}`;
+  const helperId = `helper-${defaultId}`;
+  const errorId = `error-${defaultId}`;
 
   return (
     <div class={`${local.fullWidth ? "w-full" : ""}`}>
@@ -34,7 +37,7 @@ export const Input: Component<InputProps> = (props) => {
 
       <div class="relative">
         <Show when={local.icon}>
-          <div class="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)]">
+          <div class="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)] pointer-events-none">
             {local.icon}
           </div>
         </Show>
@@ -42,6 +45,8 @@ export const Input: Component<InputProps> = (props) => {
         <input
           {...others}
           id={inputId()}
+          aria-invalid={!!local.error}
+          aria-describedby={local.error ? errorId : local.helperText ? helperId : undefined}
           class={`
             w-full h-10 px-3
             ${local.icon ? "pl-10" : ""}
@@ -63,14 +68,22 @@ export const Input: Component<InputProps> = (props) => {
         />
       </div>
 
-      <Show when={local.error || local.helperText}>
+      <Show when={local.error}>
         <p
-          class={`
-            mt-2 text-sm
-            ${local.error ? "text-[var(--color-accent-error)]" : "text-[var(--color-text-secondary)]"}
-          `}
+          id={errorId}
+          class="mt-2 text-sm text-[var(--color-accent-error)]"
+          role="alert"
         >
-          {local.error || local.helperText}
+          {local.error}
+        </p>
+      </Show>
+
+      <Show when={!local.error && local.helperText}>
+        <p
+          id={helperId}
+          class="mt-2 text-sm text-[var(--color-text-secondary)]"
+        >
+          {local.helperText}
         </p>
       </Show>
     </div>
@@ -135,7 +148,10 @@ export const Textarea: Component<TextareaProps> = (props) => {
     "id"
   ]);
 
-  const textareaId = () => local.id || `textarea-${Math.random().toString(36).substr(2, 9)}`;
+  const defaultId = createUniqueId();
+  const textareaId = () => local.id || `textarea-${defaultId}`;
+  const helperId = `helper-${defaultId}`;
+  const errorId = `error-${defaultId}`;
 
   return (
     <div class={`${local.fullWidth ? "w-full" : ""}`}>
@@ -151,6 +167,8 @@ export const Textarea: Component<TextareaProps> = (props) => {
       <textarea
         {...others}
         id={textareaId()}
+        aria-invalid={!!local.error}
+        aria-describedby={local.error ? errorId : local.helperText ? helperId : undefined}
         class={`
           w-full px-3 py-2
           bg-[var(--color-background-tertiary)]
@@ -171,14 +189,22 @@ export const Textarea: Component<TextareaProps> = (props) => {
         `}
       />
 
-      <Show when={local.error || local.helperText}>
+      <Show when={local.error}>
         <p
-          class={`
-            mt-2 text-sm
-            ${local.error ? "text-[var(--color-accent-error)]" : "text-[var(--color-text-secondary)]"}
-          `}
+          id={errorId}
+          class="mt-2 text-sm text-[var(--color-accent-error)]"
+          role="alert"
         >
-          {local.error || local.helperText}
+          {local.error}
+        </p>
+      </Show>
+
+      <Show when={!local.error && local.helperText}>
+        <p
+          id={helperId}
+          class="mt-2 text-sm text-[var(--color-text-secondary)]"
+        >
+          {local.helperText}
         </p>
       </Show>
     </div>

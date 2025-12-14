@@ -39,6 +39,7 @@ const Profiles: Component = () => {
   const [sortBy, setSortBy] = createSignal("lastPlayed");
   const [showCreateModal, setShowCreateModal] = createSignal(false);
   const [selectedProfile, setSelectedProfile] = createSignal<string | null>(null);
+  const [profileToDelete, setProfileToDelete] = createSignal<string | null>(null);
 
   // Mock profiles for demo
   const profiles = () => [
@@ -109,14 +110,20 @@ const Profiles: Component = () => {
     }
   };
 
-  const handleDeleteProfile = async (id: string) => {
-    if (confirm("Are you sure you want to delete this profile?")) {
+  const requestDelete = (id: string) => {
+    setProfileToDelete(id);
+  };
+
+  const confirmDelete = async () => {
+    const id = profileToDelete();
+    if (id) {
       try {
         profileStore.removeProfile(id);
         toast.success("Profile deleted");
       } catch (err) {
         toast.error("Failed to delete", (err as Error).message);
       }
+      setProfileToDelete(null);
     }
   };
 
@@ -250,7 +257,7 @@ const Profiles: Component = () => {
                           variant="secondary"
                           icon={<Trash2 size={16} />}
                           aria-label="Delete"
-                          onClick={() => handleDeleteProfile(profile.id)}
+                          onClick={() => requestDelete(profile.id)}
                         />
                       </div>
                     </div>
@@ -358,7 +365,7 @@ const Profiles: Component = () => {
                         variant="ghost"
                         icon={<Trash2 size={16} />}
                         aria-label="Delete"
-                        onClick={() => handleDeleteProfile(profile.id)}
+                        onClick={() => requestDelete(profile.id)}
                       />
                     </div>
                   </CardContent>
@@ -445,6 +452,28 @@ const Profiles: Component = () => {
               }}
             >
               Create Profile
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal open={!!profileToDelete()} onOpenChange={(open) => !open && setProfileToDelete(null)}>
+        <ModalContent>
+          <ModalHeader onClose={() => setProfileToDelete(null)}>
+            <ModalTitle class="text-[var(--color-accent-error)]">Delete Profile?</ModalTitle>
+          </ModalHeader>
+          <ModalBody>
+            <p class="text-[var(--color-text-secondary)]">
+              Are you sure you want to delete this profile? This action cannot be undone and will remove all associated configurations.
+            </p>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="secondary" onClick={() => setProfileToDelete(null)}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={confirmDelete}>
+              Delete Permanently
             </Button>
           </ModalFooter>
         </ModalContent>

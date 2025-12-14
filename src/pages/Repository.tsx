@@ -31,7 +31,7 @@ import {
 } from "@components/common/Modal";
 import { toast } from "@components/common/Toast";
 import { modStore } from "@stores/stores";
-import { formatBytes } from "@lib/utils";
+import { formatBytes, debounce } from "@lib/utils";
 
 const Repository: Component = () => {
   const [activeTab, setActiveTab] = createSignal<"local" | "online">("local");
@@ -175,6 +175,10 @@ const Repository: Component = () => {
     setShowModDetail(true);
   };
 
+  const handleSearch = debounce((value: string) => {
+    setSearchQuery(value);
+  }, 300);
+
   return (
     <div class="p-6 space-y-6">
       {/* Header */}
@@ -220,7 +224,7 @@ const Repository: Component = () => {
             <div class="flex-1">
               <SearchInput
                 placeholder="Search mods by name or description..."
-                onSearch={setSearchQuery}
+                onInput={(e) => handleSearch(e.currentTarget.value)}
               />
             </div>
             <div class="flex gap-2">
