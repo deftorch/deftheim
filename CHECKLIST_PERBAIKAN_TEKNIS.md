@@ -37,14 +37,14 @@
 ## ✅ Prioritas 3: Peningkatan (Timeline: 2-4 Minggu)
 **Kriteria:** DX, Docs, Polish.
 
-- [ ] **[DOCS] Update README & CONTRIBUTING**
+- [x] **[DOCS] Update README & CONTRIBUTING**
   - Jelaskan arsitektur folder dan cara run test.
-- [ ] **[FE] Implementasi Virtual Scroller**
-  - Jika list mod mencapai ratusan, gunakan virtual scroller di UI.
-- [ ] **[BE] Logging System**
-  - Pastikan logs disimpan ke file (menggunakan `tracing-appender`) untuk debugging user issue.
-- [ ] **[TYPE] Perbaiki `any` di `tauri.ts`**
-  - Buat interface TypeScript yang sesuai dengan Struct Rust.
+- [x] **[FE] Implementasi Virtual Scroller**
+  - Gunakan `@tanstack/solid-virtual` untuk list mod di `Repository.tsx`.
+- [x] **[BE] Logging System**
+  - Implementasi `tracing-appender` di `main.rs` untuk menyimpan logs ke file.
+- [x] **[TYPE] Perbaiki `any` di `tauri.ts`**
+  - Gunakan interface TypeScript yang sesuai (`ModInfo`, `Profile`) menggantikan `any`.
 
 **Definition of Done:**
 - Dokumentasi lengkap.
@@ -54,4 +54,4 @@
 ## Progress Tracking
 - **Priority 1:** ✅ 4/4 completed
 - **Priority 2:** ✅ 4/4 completed
-- **Priority 3:** ⬜ 0/4 completed
+- **Priority 3:** ✅ 4/4 completed

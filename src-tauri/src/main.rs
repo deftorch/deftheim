@@ -7,12 +7,29 @@ mod utils;
 mod db;
 mod error;
 
-use tracing_subscriber;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 fn main() {
+    // Setup file logging
+    // In a real app we'd get the app data dir from tauri config context, but here we can't easily access it before building
+    // So we'll try to use a standard location or local folder for simplicity in this audit fix
+    let file_appender = tracing_appender::rolling::daily("logs", "deftheim.log");
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+
     // Initialize logging
-    tracing_subscriber::fmt()
-        .with_env_filter("deftheim=debug,info")
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_writer(non_blocking)
+                .with_ansi(false)
+        )
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_writer(std::io::stdout)
+        )
+        .with(
+             tracing_subscriber::EnvFilter::new("deftheim=debug,info")
+        )
         .init();
 
     tracing::info!("Starting Deftheim v2.0.0");

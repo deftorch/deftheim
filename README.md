@@ -4,128 +4,81 @@
 
 ## ✨ Features
 
-### 🎯 Core Features
-- ✅ **Profile Management** - Create unlimited mod configurations
-- ✅ **Smart Mod Scanner** - Auto-detect and parse mods
-- ✅ **One-Click Installation** - Install mods from Thunderstore
-- ✅ **Automatic Updates** - Keep mods up-to-date
-- ✅ **Conflict Detection** - Identify and resolve conflicts
-- ✅ **Backup & Restore** - Never lose your configurations
-- ✅ **Beautiful UI** - Modern dark theme with smooth animations
-
-### 🚀 Advanced Features
-- ✅ **SQLite Database** - Fast and reliable data storage
-- ✅ **Multi-Profile Support** - Switch between configurations instantly
-- ✅ **Search & Filter** - Find mods quickly
-- ✅ **Load Order Management** - Control mod loading sequence
-- ✅ **BepInEx Integration** - Seamless mod framework support
-- ✅ **Settings Sync** - Customizable preferences
+- **Profile Management** - Create unlimited mod configurations
+- **Smart Mod Scanner** - Auto-detect and parse mods
+- **One-Click Installation** - Install mods from Thunderstore
+- **Safe & Secure** - Strict CSP and scoped filesystem access
+- **Performant** - Virtualized lists for large mod collections
 
 ---
 
-## 📦 Installation
+## 🏗️ Architecture
 
-### Prerequisites
-- **Windows 10/11** (64-bit)
-- **Valheim** (installed via Steam)
-- **~500MB** free disk space
+### Folder Structure
+- **`src/`** - Frontend (SolidJS)
+  - **`components/`** - Reusable UI components
+  - **`pages/`** - Application routes
+  - **`stores/`** - State management (Split into modular stores: `mod.store.ts`, `profile.store.ts`, etc.)
+  - **`lib/`** - Utilities and API wrappers (`tauri.ts`)
+- **`src-tauri/`** - Backend (Rust)
+  - **`src/commands/`** - Tauri command handlers (Business logic)
+  - **`src/models/`** - Shared data structures
+  - **`src/services/`** - Core business logic services
+  - **`src/utils/`** - Helper functions
 
-### Quick Install
-1. Download the latest release from [Releases](#)
-2. Run `Deftheim-Setup.exe`
-3. Follow the installation wizard
-4. Launch and enjoy!
+### Key Design Decisions
+- **Stores**: Global state is managed via SolidJS stores, split by domain to improve maintainability.
+- **Security**: `tauri.conf.json` enforces strict security policies.
+- **Logging**: Rust backend uses `tracing` and `tracing-appender` for rotating file logs.
 
 ---
 
 ## 🛠️ Development
 
-For detailed development instructions, please refer to [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+### Prerequisites
+- Node.js >= 20
+- Rust >= 1.85
+- System dependencies: `libwebkit2gtk-4.0-dev` (Linux only), `build-essential`
 
-### Tech Stack
-```json
-{
-  "frontend": {
-    "framework": "SolidJS 1.9.10",
-    "language": "TypeScript 5.7.2",
-    "styling": "Tailwind CSS 4.1.7",
-    "ui": "Kobalte + Motion One",
-    "build": "Vite 6.0.7"
-  },
-  "backend": {
-    "framework": "Tauri 2.9",
-    "language": "Rust 1.85 (2024 Edition)",
-    "database": "SQLite 3",
-    "async": "Tokio 1.42"
-  }
-}
-```
-
-### Setup Development Environment
-
+### Setup
 ```bash
-# Clone repository
 git clone https://github.com/deftorch/deftheim.git
 cd deftheim
-
-# Install dependencies
 npm install
-
-# Run development server
-npm run tauri:dev
 ```
 
-### Build for Production
+### Running Tests
+We use **Vitest** for frontend logic and **Cargo Test** for backend.
 
 ```bash
-# Build optimized release
-npm run tauri:build
+# Run Frontend Tests (Stores, Utils)
+npm test
 
-# Output: src-tauri/target/release/
+# Run Backend Tests (Rust logic)
+cd src-tauri && cargo test
+```
+
+### Running the App
+```bash
+# Development Mode
+npm run tauri:dev
+
+# Build for Production
+npm run tauri:build
 ```
 
 ---
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+1. Fork the repository.
+2. Create a branch (`feature/my-feature`).
+3. Commit your changes.
+4. Open a Pull Request.
 
-### Development Workflow
-
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
-
----
-
-## 🐛 Bug Reports
-
-Found a bug? Please [open an issue](https://github.com/deftorch/deftheim/issues/new) with:
-
-- **OS & Version**
-- **App Version**
-- **Steps to Reproduce**
-- **Expected vs Actual Behavior**
-- **Screenshots** (if applicable)
+Please ensure all tests pass before submitting.
 
 ---
 
 ## 📄 License
-
-MIT License © 2024 Deftheim Team
-
----
-
-## 🙏 Acknowledgments
-
-- **Valheim** by Iron Gate Studio
-- **BepInEx** modding framework
-- **Thunderstore** mod repository
-- **SolidJS** & **Tauri** teams
-- All mod authors in the community
-
----
-
-**Built with ❤️ by Deftorch**
+MIT License

@@ -20,6 +20,7 @@
   "dependencies": {
     "@kobalte/core": "^0.13.7",
     "@solidjs/router": "^0.15.2",
+    "@tanstack/solid-virtual": "^3.13.13",
     "@tauri-apps/api": "^2.9.0",
     "@tauri-apps/plugin-dialog": "^2.0.0",
     "@tauri-apps/plugin-fs": "^2.0.0",
