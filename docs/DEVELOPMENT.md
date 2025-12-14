@@ -1,4 +1,4 @@
-# Valheim Mod Manager - Setup & Development Guide
+# Deftheim - Setup & Development Guide
 
 ## 🚀 Quick Start
 
@@ -18,7 +18,7 @@ chmod +x setup.sh
 ./setup.sh
 
 # Or manually create structure
-mkdir valheim-mod-manager && cd valheim-mod-manager
+mkdir deftheim && cd deftheim
 ```
 
 2. **Install dependencies:**
@@ -38,7 +38,7 @@ The application will open automatically and hot-reload on changes.
 ## 📁 Project Structure
 
 ```
-valheim-mod-manager/
+deftheim/
 ├── src/                      # Frontend (SolidJS + TypeScript)
 │   ├── components/
 │   │   ├── common/          # Button, Card, Input, Modal, Toast
