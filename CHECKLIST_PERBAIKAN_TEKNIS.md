@@ -3,14 +3,14 @@
 ## ✅ Prioritas 1: Kritis (Timeline: 1-3 Hari)
 **Kriteria:** Security vulnerabilities & Functional Blockers.
 
-- [ ] **[SECURITY] Perbaiki `tauri.conf.json` CSP**
-  - Set `csp` string yang ketat (e.g., `default-src 'self'; img-src 'self' asset: https://cdn.thunderstore.io; style-src 'self' 'unsafe-inline';`).
-- [ ] **[SECURITY] Batasi Scope Plugin `fs`**
-  - Ubah scope `["**"]` menjadi path spesifik saja (misal `$APP/*`, `$DOCUMENT/Valheim/*`). Gunakan variable path Tauri.
-- [ ] **[BACKEND] Implementasi Dasar `system_operations`**
+- [x] **[SECURITY] Perbaiki `tauri.conf.json` CSP**
+  - Set `csp` string yang ketat (`default-src 'self'; img-src 'self' asset: https://cdn.thunderstore.io; style-src 'self' 'unsafe-inline'; script-src 'self';`).
+- [x] **[SECURITY] Batasi Scope Plugin `fs`**
+  - Ubah scope `["**"]` menjadi path spesifik (`$APP/*`, `$HOME/.config/deftheim/*`, `$TEMP/*`).
+- [x] **[BACKEND] Implementasi Dasar `system_operations`**
   - Implementasi `detect_valheim_path` dan `check_bepinex` agar aplikasi bisa mengenali environment user saat startup.
-- [ ] **[FRONTEND] Fix Startup Blocking**
-  - Refactor `App.tsx` agar tidak memblokir render UI saat loading data (`onMount` -> `createResource` atau handle loading state di UI).
+- [x] **[FRONTEND] Fix Startup Blocking**
+  - Refactor `App.tsx` agar tidak memblokir render UI saat loading data (`onMount` -> `createResource` dengan `Suspense` fallback atau loading UI).
 
 **Definition of Done:**
 - Security scan manual pada config file passed.
@@ -20,13 +20,13 @@
 ## ✅ Prioritas 2: Fondasi (Timeline: 1-2 Minggu)
 **Kriteria:** Architecture & Core Features Implementation.
 
-- [ ] **[REFACTOR] Split `src/stores/stores.ts`**
+- [x] **[REFACTOR] Split `src/stores/stores.ts`**
   - Pecah menjadi `stores/modStore.ts`, `stores/profileStore.ts`, dll.
-- [ ] **[BACKEND] Implementasi `mod_operations`**
+- [x] **[BACKEND] Implementasi `mod_operations`**
   - Implementasi `scan_mods` (baca folder), `install_mod` (download & unzip), `uninstall_mod`.
-- [ ] **[BACKEND] Error Handling**
+- [x] **[BACKEND] Error Handling**
   - Ganti `unwrap()` (jika ada nanti) dengan proper `Result<?>` handling dan kirim error code yang jelas ke frontend.
-- [ ] **[DX] Setup Testing Framework**
+- [x] **[DX] Setup Testing Framework**
   - Buat 1 contoh unit test untuk Frontend (Store) dan 1 untuk Backend (Service).
 
 **Definition of Done:**
@@ -52,6 +52,6 @@
 - Logs tersedia untuk debugging.
 
 ## Progress Tracking
-- **Priority 1:** ⬜ 0/4 completed
-- **Priority 2:** ⬜ 0/4 completed
+- **Priority 1:** ✅ 4/4 completed
+- **Priority 2:** ✅ 4/4 completed
 - **Priority 3:** ⬜ 0/4 completed

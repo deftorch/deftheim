@@ -42,6 +42,7 @@
     "autoprefixer": "^10.4.20",
     "eslint": "^9.16.0",
     "eslint-plugin-solid": "^0.14.3",
+    "jsdom": "^27.3.0",
     "prettier": "^3.4.2",
     "tailwindcss": "^4.1.7",
     "typescript": "^5.9.3",
