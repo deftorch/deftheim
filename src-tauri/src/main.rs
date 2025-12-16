@@ -50,6 +50,9 @@ fn main() {
             commands::backup_operations::create_backup,
             commands::backup_operations::restore_backup,
             commands::backup_operations::list_backups,
+            // Settings operations
+            commands::settings_operations::save_settings,
+            commands::settings_operations::load_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

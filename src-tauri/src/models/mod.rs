@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ModInfo {
     pub id: String,
     pub name: String,
@@ -21,6 +22,7 @@ pub struct ModInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Profile {
     pub id: String,
     pub name: String,
@@ -35,6 +37,7 @@ pub struct Profile {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AppSettings {
     pub valheim_path: String,
     pub bepinex_path: String,
