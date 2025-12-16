@@ -43,5 +43,9 @@ export const tauriCommands = {
     invoke<void>("create_backup", { description }),
   restoreBackup: (backupId: string) =>
     invoke<void>("restore_backup", { backupId }),
-  listBackups: () => invoke<any[]>("list_backups")
+  listBackups: () => invoke<any[]>("list_backups"),
+
+  // Settings operations
+  saveSettings: (settings: any) => invoke<void>("save_settings", { settings }),
+  loadSettings: () => invoke<any>("load_settings")
 };

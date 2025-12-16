@@ -1,4 +1,4 @@
-import { createStore } from "solid-js/store";
+import { createStore, reconcile } from "solid-js/store";
 
 // ============================================================================
 // TYPES
@@ -89,7 +89,7 @@ export const modStore = {
     mods.forEach((mod) => {
       modsMap[mod.id] = mod;
     });
-    setModState("mods", modsMap);
+    setModState("mods", reconcile(modsMap));
   },
 
   addMod(mod: ModInfo) {
@@ -124,8 +124,7 @@ export const modStore = {
       this.setMods(mods);
     } catch (err) {
       console.error("Failed to load mods:", err);
-      // setModState("error", (err as Error).message);
-      // Fallback to empty for now if backend not ready
+      setModState("error", (err as Error).message);
       this.setMods([]);
     } finally {
       setModState("loading", false);
@@ -225,7 +224,7 @@ export const profileStore = {
       this.setProfiles(profiles);
     } catch (err) {
       console.error("Failed to load profiles:", err);
-      // setProfileState("error", (err as Error).message);
+      setProfileState("error", (err as Error).message);
       this.setProfiles([]);
     } finally {
       setProfileState("loading", false);
@@ -295,8 +294,9 @@ export const settingsStore = {
     setSettingsState("loading", true);
     setSettingsState("error", null);
     try {
-      // TODO: Call Tauri command to load settings
-      console.log("Loading settings...");
+      const { tauriCommands } = await import("@lib/api/tauri");
+      const settings = await tauriCommands.loadSettings();
+      this.updateSettings(settings);
     } catch (err) {
       setSettingsState("error", (err as Error).message);
     } finally {
@@ -307,8 +307,10 @@ export const settingsStore = {
   async saveSettings() {
     setSettingsState("loading", true);
     try {
-      // TODO: Call Tauri command to save settings
-      console.log("Saving settings...");
+      const { tauriCommands } = await import("@lib/api/tauri");
+      // Use get settings logic to avoid passing loading/error states
+      const { loading, error, ...settings } = settingsState;
+      await tauriCommands.saveSettings(settings);
     } catch (err) {
       setSettingsState("error", (err as Error).message);
       throw err;
