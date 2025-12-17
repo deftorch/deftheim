@@ -29,6 +29,9 @@ pub enum AppError {
     #[error("Invalid path: {0}")]
     InvalidPath(String),
 
+    #[error("Checksum mismatch. Expected: {0}, Computed: {1}")]
+    ChecksumMismatch(String, String),
+
     #[error("{0}")]
     Custom(String),
 }

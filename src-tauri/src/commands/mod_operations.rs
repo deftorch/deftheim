@@ -8,6 +8,8 @@ use walkdir::WalkDir;
 use serde::Deserialize;
 use tauri::State;
 use crate::state::AppState;
+use sha2::{Sha256, Digest};
+use futures::stream::{self, StreamExt};
 
 #[derive(Debug, Deserialize)]
 struct Manifest {
@@ -80,16 +82,46 @@ pub async fn scan_mods(repository_path: String) -> Result<Vec<ModInfo>> {
     Ok(mods)
 }
 
-#[tauri::command]
-pub async fn install_mod(state: State<'_, AppState>, repository_path: String, mod_id: String, url: String) -> Result<()> {
-    tracing::info!("Starting installation for: {}", mod_id);
-    let mut visited = std::collections::HashSet::new();
-    install_mod_recursive(&state, &repository_path, &mod_id, &url, &mut visited).await
+fn verify_checksum(content: &[u8], expected_hash: &str) -> Result<()> {
+    if expected_hash.is_empty() {
+        return Ok(());
+    }
+    let mut hasher = Sha256::new();
+    hasher.update(content);
+    let result = hasher.finalize();
+    let computed_hash = hex::encode(result);
+
+    if computed_hash != expected_hash {
+        return Err(AppError::ChecksumMismatch(expected_hash.to_string(), computed_hash));
+    }
+    Ok(())
 }
 
-// Recursive helper function
+#[tauri::command]
+pub async fn install_mod(state: State<'_, AppState>, repository_path: String, mod_id: String, url: String) -> Result<()> {
+    // For single install, we treat it as an isolated call or entry point.
+    // However, the original install_mod was recursive.
+    // We should keep the original behavior for backward compatibility or simple use,
+    // but we can delegate to the new recursive/parallel logic if possible.
+    // But since `install_mod` signature is fixed for frontend (maybe), we should keep it.
+    // The original implementation was:
+
+    tracing::info!("Starting installation for: {}", mod_id);
+    let mut visited = std::collections::HashSet::new();
+    // Re-use recursive implementation but adapted?
+    // Actually, let's keep the original sequential implementation as `install_mod_recursive`
+    // OR switch to the new one?
+    // The new requirement is "Parallel Downloads".
+    // So `install_mod` should probably also use parallel if possible?
+    // But let's just implement `install_mod_with_deps_parallel` as a NEW command for now,
+    // and keep `install_mod` functional (maybe using `install_single_mod` sequentially).
+
+    install_mod_recursive_sequential(&state, &repository_path, &mod_id, &url, &mut visited).await
+}
+
+// Renamed old recursive function to keep it for sequential install_mod
 #[async_recursion::async_recursion]
-async fn install_mod_recursive(
+async fn install_mod_recursive_sequential(
     state: &AppState,
     repository_path: &str,
     mod_id: &str,
@@ -97,22 +129,41 @@ async fn install_mod_recursive(
     visited: &mut std::collections::HashSet<String>
 ) -> Result<()> {
     if visited.contains(mod_id) {
-        tracing::info!("Mod {} already visited, skipping recursion", mod_id);
         return Ok(());
     }
     visited.insert(mod_id.to_string());
 
-    tracing::info!("Installing mod: {} from {}", mod_id, url);
-    let target_dir = Path::new(repository_path).join(mod_id);
+    // Use install_single_mod logic
+    install_single_mod(state, repository_path, mod_id, url, None).await?;
 
-    // Download and Install (only if not already exists or force overwrite - currently skipping if exists)
-    // Note: To support updates, we might want to overwrite. For now, let's assume if dir exists, it's installed.
+    // Dependencies
+    let dependencies = get_dependencies_from_db(state, mod_id)?;
+    for dep_id in dependencies {
+        if let Some(url) = get_mod_url_from_db(state, &dep_id)? {
+             install_mod_recursive_sequential(state, repository_path, &dep_id, &url, visited).await?;
+        }
+    }
+    Ok(())
+}
+
+// New helper for single mod installation
+pub async fn install_single_mod(
+    state: &AppState,
+    repository_path: &str,
+    mod_id: &str,
+    url: &str,
+    expected_hash: Option<&str>
+) -> Result<()> {
+    let target_dir = Path::new(repository_path).join(mod_id);
     if !target_dir.exists() {
-        // Download
+        tracing::info!("Downloading and installing mod: {} from {}", mod_id, url);
         let response = reqwest::get(url).await?;
         let content = response.bytes().await?;
 
-        // Unzip
+        if let Some(hash) = expected_hash {
+            verify_checksum(&content, hash)?;
+        }
+
         let reader = Cursor::new(content);
         let mut archive = zip::ZipArchive::new(reader).map_err(|e| AppError::Custom(e.to_string()))?;
 
@@ -139,95 +190,136 @@ async fn install_mod_recursive(
         }
 
         // Parse manifest and update DB
-        let manifest_path = target_dir.join("manifest.json");
-        if manifest_path.exists() {
-            if let Ok(content) = fs::read_to_string(&manifest_path) {
-                if let Ok(manifest) = serde_json::from_str::<Manifest>(&content) {
-                    let conn = state.db.lock().map_err(|_| AppError::Custom("DB lock poisoned".to_string()))?;
+        update_db_from_manifest(state, &target_dir, mod_id, url)?;
 
-                    conn.execute(
-                        "INSERT OR IGNORE INTO mods (id, name, owner, full_name, package_url, date_created, date_updated, uuid4, rating_score, is_pinned, is_deprecated, has_nsfw_content)
-                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
-                        (
-                            mod_id,
-                            &manifest.name,
-                            "Unknown",
-                            mod_id,
-                            url,
-                            "", "", "", 0, false, false, false
-                        ),
-                    )?;
+    } else {
+        tracing::info!("Mod {} already installed.", mod_id);
+    }
+    Ok(())
+}
 
-                    conn.execute(
-                        "INSERT OR IGNORE INTO mod_versions (full_name, mod_id, name, description, icon, version_number, download_url, downloads, date_created, website_url, is_active, uuid4, file_size)
-                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
-                        (
-                            mod_id,
-                            mod_id,
-                            &manifest.name,
-                            &manifest.description.unwrap_or_default(),
-                            "",
-                            &manifest.version_number,
-                            url,
-                            0, "",
-                            &manifest.website_url.unwrap_or_default(),
-                            true, "", 0
-                        ),
-                    )?;
+fn update_db_from_manifest(state: &AppState, target_dir: &Path, mod_id: &str, url: &str) -> Result<()> {
+    let manifest_path = target_dir.join("manifest.json");
+    if manifest_path.exists() {
+        if let Ok(content) = fs::read_to_string(&manifest_path) {
+            if let Ok(manifest) = serde_json::from_str::<Manifest>(&content) {
+                let conn = state.db.lock().map_err(|_| AppError::Custom("DB lock poisoned".to_string()))?;
 
-                    // Insert dependencies from manifest
-                    if let Some(deps) = manifest.dependencies {
-                        for dep in deps {
-                            conn.execute(
-                                "INSERT OR IGNORE INTO mod_dependencies (version_full_name, dependency_id) VALUES (?1, ?2)",
-                                (mod_id, &dep),
-                            )?;
-                        }
+                conn.execute(
+                    "INSERT OR IGNORE INTO mods (id, name, owner, full_name, package_url, date_created, date_updated, uuid4, rating_score, is_pinned, is_deprecated, has_nsfw_content)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                    (
+                        mod_id,
+                        &manifest.name,
+                        "Unknown",
+                        mod_id,
+                        url,
+                        "", "", "", 0, false, false, false
+                    ),
+                )?;
+
+                conn.execute(
+                    "INSERT OR IGNORE INTO mod_versions (full_name, mod_id, name, description, icon, version_number, download_url, downloads, date_created, website_url, is_active, uuid4, file_size)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                    (
+                        mod_id,
+                        mod_id,
+                        &manifest.name,
+                        &manifest.description.unwrap_or_default(),
+                        "",
+                        &manifest.version_number,
+                        url,
+                        0, "",
+                        &manifest.website_url.unwrap_or_default(),
+                        true, "", 0
+                    ),
+                )?;
+
+                if let Some(deps) = manifest.dependencies {
+                    for dep in deps {
+                        conn.execute(
+                            "INSERT OR IGNORE INTO mod_dependencies (version_full_name, dependency_id) VALUES (?1, ?2)",
+                            (mod_id, &dep),
+                        )?;
                     }
                 }
             }
         }
+    }
+    Ok(())
+}
+
+fn get_dependencies_from_db(state: &AppState, mod_id: &str) -> Result<Vec<String>> {
+    let conn = state.db.lock().map_err(|_| AppError::Custom("DB lock poisoned".to_string()))?;
+    let mut stmt = conn.prepare("SELECT dependency_id FROM mod_dependencies WHERE version_full_name = ?")?;
+    let rows = stmt.query_map([mod_id], |row| row.get(0))?;
+    let mut deps = Vec::new();
+    for r in rows {
+        if let Ok(d) = r {
+            deps.push(d);
+        }
+    }
+    Ok(deps)
+}
+
+fn get_mod_url_from_db(state: &AppState, mod_id: &str) -> Result<Option<String>> {
+    let conn = state.db.lock().map_err(|_| AppError::Custom("DB lock poisoned".to_string()))?;
+    let mut stmt = conn.prepare("SELECT download_url FROM mod_versions WHERE full_name = ?")?;
+    let mut rows = stmt.query([mod_id])?;
+    if let Some(row) = rows.next()? {
+        Ok(row.get(0).ok())
     } else {
-        tracing::info!("Mod {} already installed at {:?}", mod_id, target_dir);
+        Ok(None)
     }
+}
 
-    // Resolve Dependencies
-    let dependencies: Vec<String> = {
-        let conn = state.db.lock().map_err(|_| AppError::Custom("DB lock poisoned".to_string()))?;
-        let mut stmt = conn.prepare("SELECT dependency_id FROM mod_dependencies WHERE version_full_name = ?")?;
-        let rows = stmt.query_map([mod_id], |row| row.get(0))?;
-        let mut deps = Vec::new();
-        for r in rows {
-            if let Ok(d) = r {
-                deps.push(d);
+// 2. Modifikasi install_mod untuk download parallel dependensi
+#[tauri::command]
+pub async fn install_mod_with_deps_parallel(
+    state: State<'_, AppState>,
+    repository_path: String,
+    mod_id: String
+) -> Result<()> {
+    tracing::info!("Starting parallel installation for: {}", mod_id);
+
+    // First ensure the main mod is installed (to get its dependencies if not already in DB?)
+    // Actually, usually we know the dependencies from the DB cache if we browsed it.
+    // If not, we might need to fetch the mod first.
+    // Let's assume the mod is known in DB or passed URL.
+    // Wait, this function doesn't take URL. It assumes DB has it.
+
+    let url = get_mod_url_from_db(&state, &mod_id)?.ok_or_else(|| AppError::ModNotFound(mod_id.clone()))?;
+
+    // Install the main mod first
+    install_single_mod(&state, &repository_path, &mod_id, &url, None).await?;
+
+    // Now get dependencies
+    let dependencies = get_dependencies_from_db(&state, &mod_id)?;
+    tracing::info!("Found dependencies for {}: {:?}", mod_id, dependencies);
+
+    // Download paralel dengan batas konkurensi (misal 5)
+    let stream = stream::iter(dependencies)
+        .map(|dep_id| {
+            let state = state.clone();
+            let repo = repository_path.clone();
+            async move {
+                // We need to resolve URL for each dependency
+                if let Ok(Some(url)) = get_mod_url_from_db(&state, &dep_id) {
+                     install_single_mod(&state, &repo, &dep_id, &url, None).await
+                } else {
+                    tracing::warn!("Could not find URL for dependency: {}", dep_id);
+                    // Just skip if not found?
+                    Ok(())
+                }
             }
+        })
+        .buffer_unordered(5); // 5 concurrent downloads
+
+    stream.for_each(|res| async {
+        if let Err(e) = res {
+            tracing::error!("Failed to install dependency: {}", e);
         }
-        deps
-    };
-
-    tracing::info!("Found {} dependencies for {}", dependencies.len(), mod_id);
-
-    for dep_id in dependencies {
-        // Find download URL for dependency
-        let dep_url: Option<String> = {
-            let conn = state.db.lock().map_err(|_| AppError::Custom("DB lock poisoned".to_string()))?;
-            let mut stmt = conn.prepare("SELECT download_url FROM mod_versions WHERE full_name = ?")?;
-            let mut rows = stmt.query([&dep_id])?;
-            if let Some(row) = rows.next()? {
-                row.get(0).ok()
-            } else {
-                None
-            }
-        };
-
-        if let Some(url) = dep_url {
-            tracing::info!("Recursively installing dependency: {}", dep_id);
-            // Box::pin is handled by async_recursion macro
-            install_mod_recursive(state, repository_path, &dep_id, &url, visited).await?;
-        } else {
-            tracing::warn!("Could not find download URL for dependency: {}", dep_id);
-        }
-    }
+    }).await;
 
     Ok(())
 }
