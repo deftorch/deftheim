@@ -77,5 +77,19 @@ pub fn create_tables(conn: &Connection) -> Result<()> {
         [],
     )?;
 
+    // Create indexes for performance
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_mod_deps_parent ON mod_dependencies(version_full_name)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_mod_deps_target ON mod_dependencies(dependency_id)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_mod_versions_mod_id ON mod_versions(mod_id)",
+        [],
+    )?;
+
     Ok(())
 }
