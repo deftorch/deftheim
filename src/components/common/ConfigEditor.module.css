@@ -1,0 +1,55 @@
+.config-editor {
+    padding: 20px;
+    height: 100%;
+}
+
+.editor-layout {
+    display: flex;
+    gap: 20px;
+    height: calc(100% - 60px);
+}
+
+.file-list {
+    width: 250px;
+    border-right: 1px solid #ccc;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+.file-list ul {
+    list-style: none;
+    padding: 0;
+}
+
+.file-list li {
+    padding: 8px;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.file-list li:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.editor-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.editor-content textarea {
+    width: 100%;
+    flex: 1;
+    font-family: monospace;
+    padding: 10px;
+    resize: none;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.actions {
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}

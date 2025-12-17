@@ -82,90 +82,150 @@ pub async fn scan_mods(repository_path: String) -> Result<Vec<ModInfo>> {
 
 #[tauri::command]
 pub async fn install_mod(state: State<'_, AppState>, repository_path: String, mod_id: String, url: String) -> Result<()> {
-    tracing::info!("Installing mod: {} from {}", mod_id, url);
+    tracing::info!("Starting installation for: {}", mod_id);
+    let mut visited = std::collections::HashSet::new();
+    install_mod_recursive(&state, &repository_path, &mod_id, &url, &mut visited).await
+}
 
-    let target_dir = Path::new(&repository_path).join(&mod_id);
-
-    // Download
-    let response = reqwest::get(&url).await?;
-    let content = response.bytes().await?;
-
-    // Unzip
-    let reader = Cursor::new(content);
-    let mut archive = zip::ZipArchive::new(reader).map_err(|e| AppError::Custom(e.to_string()))?;
-
-    // Extract directly to target path
-    if !target_dir.exists() {
-        fs::create_dir_all(&target_dir)?;
+// Recursive helper function
+#[async_recursion::async_recursion]
+async fn install_mod_recursive(
+    state: &AppState,
+    repository_path: &str,
+    mod_id: &str,
+    url: &str,
+    visited: &mut std::collections::HashSet<String>
+) -> Result<()> {
+    if visited.contains(mod_id) {
+        tracing::info!("Mod {} already visited, skipping recursion", mod_id);
+        return Ok(());
     }
+    visited.insert(mod_id.to_string());
 
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i).map_err(|e| AppError::Custom(e.to_string()))?;
-        let outpath = match file.enclosed_name() {
-            Some(path) => target_dir.join(path),
-            None => continue,
-        };
+    tracing::info!("Installing mod: {} from {}", mod_id, url);
+    let target_dir = Path::new(repository_path).join(mod_id);
 
-        if file.name().ends_with('/') {
-            fs::create_dir_all(&outpath)?;
-        } else {
-            if let Some(p) = outpath.parent() {
-                if !p.exists() {
-                    fs::create_dir_all(p)?;
+    // Download and Install (only if not already exists or force overwrite - currently skipping if exists)
+    // Note: To support updates, we might want to overwrite. For now, let's assume if dir exists, it's installed.
+    if !target_dir.exists() {
+        // Download
+        let response = reqwest::get(url).await?;
+        let content = response.bytes().await?;
+
+        // Unzip
+        let reader = Cursor::new(content);
+        let mut archive = zip::ZipArchive::new(reader).map_err(|e| AppError::Custom(e.to_string()))?;
+
+        fs::create_dir_all(&target_dir)?;
+
+        for i in 0..archive.len() {
+            let mut file = archive.by_index(i).map_err(|e| AppError::Custom(e.to_string()))?;
+            let outpath = match file.enclosed_name() {
+                Some(path) => target_dir.join(path),
+                None => continue,
+            };
+
+            if file.name().ends_with('/') {
+                fs::create_dir_all(&outpath)?;
+            } else {
+                if let Some(p) = outpath.parent() {
+                    if !p.exists() {
+                        fs::create_dir_all(p)?;
+                    }
+                }
+                let mut outfile = fs::File::create(&outpath)?;
+                std::io::copy(&mut file, &mut outfile)?;
+            }
+        }
+
+        // Parse manifest and update DB
+        let manifest_path = target_dir.join("manifest.json");
+        if manifest_path.exists() {
+            if let Ok(content) = fs::read_to_string(&manifest_path) {
+                if let Ok(manifest) = serde_json::from_str::<Manifest>(&content) {
+                    let conn = state.db.lock().map_err(|_| AppError::Custom("DB lock poisoned".to_string()))?;
+
+                    conn.execute(
+                        "INSERT OR IGNORE INTO mods (id, name, owner, full_name, package_url, date_created, date_updated, uuid4, rating_score, is_pinned, is_deprecated, has_nsfw_content)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                        (
+                            mod_id,
+                            &manifest.name,
+                            "Unknown",
+                            mod_id,
+                            url,
+                            "", "", "", 0, false, false, false
+                        ),
+                    )?;
+
+                    conn.execute(
+                        "INSERT OR IGNORE INTO mod_versions (full_name, mod_id, name, description, icon, version_number, download_url, downloads, date_created, website_url, is_active, uuid4, file_size)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                        (
+                            mod_id,
+                            mod_id,
+                            &manifest.name,
+                            &manifest.description.unwrap_or_default(),
+                            "",
+                            &manifest.version_number,
+                            url,
+                            0, "",
+                            &manifest.website_url.unwrap_or_default(),
+                            true, "", 0
+                        ),
+                    )?;
+
+                    // Insert dependencies from manifest
+                    if let Some(deps) = manifest.dependencies {
+                        for dep in deps {
+                            conn.execute(
+                                "INSERT OR IGNORE INTO mod_dependencies (version_full_name, dependency_id) VALUES (?1, ?2)",
+                                (mod_id, &dep),
+                            )?;
+                        }
+                    }
                 }
             }
-            let mut outfile = fs::File::create(&outpath)?;
-            std::io::copy(&mut file, &mut outfile)?;
         }
+    } else {
+        tracing::info!("Mod {} already installed at {:?}", mod_id, target_dir);
     }
 
-    // Update Database
-    // Let's parse the manifest we just extracted to ensure we have the mod info in the DB
-    let manifest_path = target_dir.join("manifest.json");
-    if manifest_path.exists() {
-        if let Ok(content) = fs::read_to_string(&manifest_path) {
-            if let Ok(manifest) = serde_json::from_str::<Manifest>(&content) {
-                 let conn = state.db.lock().map_err(|_| AppError::Custom("DB lock poisoned".to_string()))?;
-
-                 conn.execute(
-                    "INSERT OR IGNORE INTO mods (id, name, owner, full_name, package_url, date_created, date_updated, uuid4, rating_score, is_pinned, is_deprecated, has_nsfw_content)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
-                    (
-                        &mod_id,
-                        &manifest.name,
-                        "Unknown", // Owner not in manifest usually
-                        &mod_id,
-                        &url,
-                        "", // date_created
-                        "", // date_updated
-                        "", // uuid4
-                        0, // rating
-                        false,
-                        false,
-                        false
-                    ),
-                )?;
-
-                conn.execute(
-                    "INSERT OR IGNORE INTO mod_versions (full_name, mod_id, name, description, icon, version_number, download_url, downloads, date_created, website_url, is_active, uuid4, file_size)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
-                    (
-                        &mod_id, // version full name
-                        &mod_id,
-                        &manifest.name,
-                        &manifest.description.unwrap_or_default(),
-                        "", // icon
-                        &manifest.version_number,
-                        &url,
-                        0,
-                        "",
-                        &manifest.website_url.unwrap_or_default(),
-                        true,
-                        "",
-                        0 // file size
-                    ),
-                )?;
+    // Resolve Dependencies
+    let dependencies: Vec<String> = {
+        let conn = state.db.lock().map_err(|_| AppError::Custom("DB lock poisoned".to_string()))?;
+        let mut stmt = conn.prepare("SELECT dependency_id FROM mod_dependencies WHERE version_full_name = ?")?;
+        let rows = stmt.query_map([mod_id], |row| row.get(0))?;
+        let mut deps = Vec::new();
+        for r in rows {
+            if let Ok(d) = r {
+                deps.push(d);
             }
+        }
+        deps
+    };
+
+    tracing::info!("Found {} dependencies for {}", dependencies.len(), mod_id);
+
+    for dep_id in dependencies {
+        // Find download URL for dependency
+        let dep_url: Option<String> = {
+            let conn = state.db.lock().map_err(|_| AppError::Custom("DB lock poisoned".to_string()))?;
+            let mut stmt = conn.prepare("SELECT download_url FROM mod_versions WHERE full_name = ?")?;
+            let mut rows = stmt.query([&dep_id])?;
+            if let Some(row) = rows.next()? {
+                row.get(0).ok()
+            } else {
+                None
+            }
+        };
+
+        if let Some(url) = dep_url {
+            tracing::info!("Recursively installing dependency: {}", dep_id);
+            // Box::pin is handled by async_recursion macro
+            install_mod_recursive(state, repository_path, &dep_id, &url, visited).await?;
+        } else {
+            tracing::warn!("Could not find download URL for dependency: {}", dep_id);
         }
     }
 
