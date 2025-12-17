@@ -47,6 +47,3 @@ codegen-units = 1
 lto = true
 opt-level = "z"
 strip = true
-
-[target."cfg(windows)".dependencies]
-winreg = "0.55.0"
