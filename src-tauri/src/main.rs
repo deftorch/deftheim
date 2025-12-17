@@ -11,6 +11,7 @@ mod error;
 use tracing_subscriber;
 use std::sync::{Arc, Mutex};
 use rusqlite::Connection;
+use tauri::Manager;
 use crate::state::AppState;
 
 fn main() {
@@ -21,19 +22,29 @@ fn main() {
 
     tracing::info!("Starting Deftheim v2.0.0");
 
-    // Initialize database
-    let db_path = "deftheim.db"; // TODO: Use proper data directory
-    let conn = Connection::open(db_path).expect("Failed to open database");
-
-    // Create tables
-    db::schema::create_tables(&conn).expect("Failed to create tables");
-
-    let app_state = AppState {
-        db: Arc::new(Mutex::new(conn)),
-    };
-
     tauri::Builder::default()
-        .manage(app_state)
+        .setup(|app| {
+            let app_handle = app.handle();
+            let app_dir = app_handle.path().app_data_dir().expect("Failed to resolve app data");
+
+            if !app_dir.exists() {
+                std::fs::create_dir_all(&app_dir)?;
+            }
+
+            let db_path = app_dir.join("deftheim.db");
+            tracing::info!("Database path: {:?}", db_path);
+
+            let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+
+            // Create tables
+            db::schema::create_tables(&conn).map_err(|e| e.to_string())?;
+
+            app.manage(AppState {
+                db: Arc::new(Mutex::new(conn)),
+            });
+
+            Ok(())
+        })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_http::init())
