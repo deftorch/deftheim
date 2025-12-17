@@ -55,6 +55,8 @@ fn main() {
             commands::profile_operations::delete_profile,
             commands::profile_operations::switch_profile,
             commands::profile_operations::list_profiles,
+            commands::profile_operations::export_profile_to_code,
+            commands::profile_operations::import_profile_from_code,
             // System operations
             commands::system_operations::detect_valheim_path,
             commands::system_operations::check_bepinex,
@@ -63,6 +65,7 @@ fn main() {
             // Update operations
             commands::update_operations::check_updates,
             commands::update_operations::update_mod,
+            commands::update_operations::update_all_mods,
             // Backup operations
             commands::backup_operations::create_backup,
             commands::backup_operations::restore_backup,
@@ -70,6 +73,10 @@ fn main() {
             // Settings operations
             commands::settings_operations::save_settings,
             commands::settings_operations::load_settings,
+            // Config operations
+            commands::config_operations::list_config_files,
+            commands::config_operations::read_config_file,
+            commands::config_operations::save_config_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

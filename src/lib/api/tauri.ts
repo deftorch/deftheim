@@ -25,6 +25,8 @@ export const tauriCommands = {
   deleteProfile: (id: string) => invoke<void>("delete_profile", { id }),
   switchProfile: (id: string) => invoke<void>("switch_profile", { id }),
   listProfiles: () => invoke<any[]>("list_profiles"),
+  exportProfileToCode: (profileId: string) => invoke<string>("export_profile_to_code", { profileId }),
+  importProfileFromCode: (code: string, newName: string) => invoke<any>("import_profile_from_code", { code, newName }),
 
   // System operations
   detectValheimPath: () => invoke<string>("detect_valheim_path"),
@@ -35,8 +37,8 @@ export const tauriCommands = {
 
   // Update operations
   checkUpdates: () => invoke<any[]>("check_updates"),
-  updateMod: (modId: string) => invoke<void>("update_mod", { modId }),
-  // updateAllMods: () => invoke<void>("update_all_mods"), // Not implemented in backend yet
+  updateMod: (repositoryPath: string, modId: string) => invoke<void>("update_mod", { repositoryPath, modId }),
+  updateAllMods: (repositoryPath: string) => invoke<void>("update_all_mods", { repositoryPath }),
 
   // Backup operations
   createBackup: (description?: string) =>
@@ -47,5 +49,10 @@ export const tauriCommands = {
 
   // Settings operations
   saveSettings: (settings: any) => invoke<void>("save_settings", { settings }),
-  loadSettings: () => invoke<any>("load_settings")
+  loadSettings: () => invoke<any>("load_settings"),
+
+  // Config operations
+  listConfigFiles: (bepinexPath: string) => invoke<string[]>("list_config_files", { bepinexPath }),
+  readConfigFile: (bepinexPath: string, filename: string) => invoke<string>("read_config_file", { bepinexPath, filename }),
+  saveConfigFile: (bepinexPath: string, filename: string, content: string) => invoke<void>("save_config_file", { bepinexPath, filename, content })
 };
