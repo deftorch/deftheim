@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+pub mod state;
 mod commands;
 mod services;
 mod models;
@@ -8,6 +9,9 @@ mod db;
 mod error;
 
 use tracing_subscriber;
+use std::sync::{Arc, Mutex};
+use rusqlite::Connection;
+use crate::state::AppState;
 
 fn main() {
     // Initialize logging
@@ -17,7 +21,19 @@ fn main() {
 
     tracing::info!("Starting Deftheim v2.0.0");
 
+    // Initialize database
+    let db_path = "deftheim.db"; // TODO: Use proper data directory
+    let conn = Connection::open(db_path).expect("Failed to open database");
+
+    // Create tables
+    db::schema::create_tables(&conn).expect("Failed to create tables");
+
+    let app_state = AppState {
+        db: Arc::new(Mutex::new(conn)),
+    };
+
     tauri::Builder::default()
+        .manage(app_state)
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_http::init())
@@ -27,6 +43,7 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             // Mod operations
+            commands::mod_operations::get_thunderstore_mods,
             commands::mod_operations::scan_mods,
             commands::mod_operations::install_mod,
             commands::mod_operations::uninstall_mod,

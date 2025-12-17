@@ -5,3 +5,5 @@ pub mod config_manager;
 pub mod update_checker;
 pub mod backup_service;
 pub mod download_manager;
+pub mod thunderstore;
+pub mod thunderstore_service;
