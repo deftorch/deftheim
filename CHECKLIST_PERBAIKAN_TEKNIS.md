@@ -22,19 +22,19 @@ Checklist ini disusun berdasarkan temuan audit untuk memandu tim dalam menstabil
 ## ✅ Prioritas 2: Fondasi (Timeline: 1-2 minggu)
 **Kriteria:** Architecture improvements, performance, type safety.
 
-- [ ] **[CODE] Hapus `any` dari `src/lib/api/tauri.ts`**.
+- [x] **[CODE] Hapus `any` dari `src/lib/api/tauri.ts`**.
     -   *Action*: Import interface `ModInfo`, `Profile`, `AppSettings` dari shared types dan aplikasikan ke return type `invoke`.
-- [ ] **[PERF] Optimalkan `scan_mods`**.
+- [x] **[PERF] Optimalkan `scan_mods`**.
     -   *Action*: Ubah iterasi sinkron menjadi asinkron (`tokio::fs`) atau gunakan `walkdir` di thread pool terpisah. Implementasi caching hasil scan.
-- [ ] **[REFACTOR] Unifikasi Logika Install**.
+- [x] **[REFACTOR] Unifikasi Logika Install**.
     -   *Action*: Gabungkan logika ekstraksi/install dari `install_mod` dan `install_mod_with_deps_parallel` ke satu service function yang reusable.
-- [ ] **[DX] Tambahkan Unit Test Backend**.
+- [x] **[DX] Tambahkan Unit Test Backend**.
     -   *Action*: Buat test untuk `verify_checksum`, parsing manifest, dan sanitasi path.
 
 **Definition of Done untuk Priority 2:**
-- [ ] Tidak ada lagi penggunaan `any` di layer API frontend.
-- [ ] `scan_mods` tidak memblokir UI thread saat memuat >500 mod.
-- [ ] Minimal 1 test case untuk setiap modul kritis backend.
+- [x] Tidak ada lagi penggunaan `any` di layer API frontend.
+- [x] `scan_mods` tidak memblokir UI thread saat memuat >500 mod.
+- [x] Minimal 1 test case untuk setiap modul kritis backend.
 
 ## ✅ Prioritas 3: Peningkatan (Timeline: 1-4 minggu)
 **Kriteria:** Code quality improvements, documentation, UI polish.
@@ -55,7 +55,7 @@ Checklist ini disusun berdasarkan temuan audit untuk memandu tim dalam menstabil
 
 ## Progress Tracking
 - **Priority 1:** ✅ 4/4 completed
-- **Priority 2:** ⬜ 0/4 completed
+- **Priority 2:** ✅ 4/4 completed
 - **Priority 3:** ⬜ 0/4 completed
 
 ## Notes

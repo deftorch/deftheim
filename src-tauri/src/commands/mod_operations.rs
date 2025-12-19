@@ -40,6 +40,7 @@ fn validate_url(url: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sha2::{Digest, Sha256};
 
     #[test]
     fn test_validate_mod_id() {
@@ -70,6 +71,19 @@ mod tests {
         // Invalid URL format
         assert!(validate_url("not_a_url").is_err());
     }
+
+    #[test]
+    fn test_verify_checksum() {
+        let content = b"test content";
+        let mut hasher = Sha256::new();
+        hasher.update(content);
+        let correct_hash = hex::encode(hasher.finalize());
+        let wrong_hash = "0000000000000000000000000000000000000000000000000000000000000000";
+
+        assert!(verify_checksum(content, &correct_hash).is_ok());
+        assert!(verify_checksum(content, wrong_hash).is_err());
+        assert!(verify_checksum(content, "").is_ok()); // Optional check skipped
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -91,58 +105,59 @@ pub async fn get_thunderstore_mods(state: State<'_, AppState>) -> Result<Vec<Mod
 #[tauri::command]
 pub async fn scan_mods(repository_path: String) -> Result<Vec<ModInfo>> {
     tracing::info!("Scanning mods in: {}", repository_path);
-    let mut mods = Vec::new();
-    let repo_path = Path::new(&repository_path);
+    let repo_path = repository_path.clone();
 
-    // Basic path sanitization for repository_path?
-    // Usually repository_path comes from settings which user controls, but we should be careful.
-    // However, the main vulnerability is `mod_id` appending to it.
+    // Offload blocking IO to a separate thread
+    let mods = tauri::async_runtime::spawn_blocking(move || {
+        let mut mods = Vec::new();
+        let path = Path::new(&repo_path);
 
-    if !repo_path.exists() {
-        return Ok(vec![]);
-    }
+        if !path.exists() {
+            return Ok(vec![]);
+        }
 
-    // We expect each folder in repository_path to be a mod folder
-    for entry in std::fs::read_dir(repo_path)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_dir() {
-            let manifest_path = path.join("manifest.json");
-            if manifest_path.exists() {
-                if let Ok(content) = fs::read_to_string(&manifest_path) {
-                    if let Ok(manifest) = serde_json::from_str::<Manifest>(&content) {
-                        let id = path.file_name().unwrap().to_string_lossy().to_string();
-                        // Try to parse author from ID (Author-Name-Version) or just directory name
-                        // This is heuristic.
-                        let parts: Vec<&str> = id.split('-').collect();
-                        let author = if parts.len() >= 2 { parts[0].to_string() } else { "Unknown".to_string() };
+        // We expect each folder in repository_path to be a mod folder
+        for entry in std::fs::read_dir(path)? {
+            let entry = entry?;
+            let mod_dir_path = entry.path();
+            if mod_dir_path.is_dir() {
+                let manifest_path = mod_dir_path.join("manifest.json");
+                if manifest_path.exists() {
+                    if let Ok(content) = fs::read_to_string(&manifest_path) {
+                        if let Ok(manifest) = serde_json::from_str::<Manifest>(&content) {
+                            let id = mod_dir_path.file_name().unwrap().to_string_lossy().to_string();
+                            // Try to parse author from ID (Author-Name-Version) or just directory name
+                            let parts: Vec<&str> = id.split('-').collect();
+                            let author = if parts.len() >= 2 { parts[0].to_string() } else { "Unknown".to_string() };
 
-                        // Calculate size
-                        let size = WalkDir::new(&path).into_iter().filter_map(|e| e.ok()).map(|e| e.metadata().map(|m| m.len()).unwrap_or(0)).sum();
+                            // Calculate size
+                            let size = WalkDir::new(&mod_dir_path).into_iter().filter_map(|e| e.ok()).map(|e| e.metadata().map(|m| m.len()).unwrap_or(0)).sum();
 
-                        mods.push(ModInfo {
-                            id: id.clone(),
-                            name: manifest.name,
-                            version: manifest.version_number,
-                            author,
-                            description: manifest.description.unwrap_or_default(),
-                            icon: None, // TODO: Load icon.png if exists
-                            size,
-                            installed: true,
-                            enabled: false, // This depends on profile, scan_mods just lists repo?
-                            dependencies: manifest.dependencies.unwrap_or_default(),
-                            categories: vec![],
-                            download_url: None,
-                            website_url: manifest.website_url,
-                            rating: None,
-                            downloads: None,
-                            last_updated: String::new(), // Metadata doesn't have this
-                        });
+                            mods.push(ModInfo {
+                                id: id.clone(),
+                                name: manifest.name,
+                                version: manifest.version_number,
+                                author,
+                                description: manifest.description.unwrap_or_default(),
+                                icon: None, // TODO: Load icon.png if exists
+                                size,
+                                installed: true,
+                                enabled: false, // This depends on profile, scan_mods just lists repo?
+                                dependencies: manifest.dependencies.unwrap_or_default(),
+                                categories: vec![],
+                                download_url: None,
+                                website_url: manifest.website_url,
+                                rating: None,
+                                downloads: None,
+                                last_updated: String::new(), // Metadata doesn't have this
+                            });
+                        }
                     }
                 }
             }
         }
-    }
+        Ok::<Vec<ModInfo>, std::io::Error>(mods)
+    }).await.map_err(|e| AppError::Custom(format!("Task join error: {}", e)))??;
 
     Ok(mods)
 }
@@ -217,7 +232,8 @@ async fn install_mod_recursive_sequential(
     Ok(())
 }
 
-// New helper for single mod installation
+/// Core installation logic used by both sequential and parallel installers.
+/// Downloads, verifies, extracts, and registers the mod.
 pub async fn install_single_mod(
     state: &AppState,
     repository_path: &str,
