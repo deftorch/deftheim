@@ -50,7 +50,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; img-src 'self' asset: https://asset.localhost https://gcdn.thunderstore.io data:; style-src 'self' 'unsafe-inline'; connect-src 'self' https://thunderstore.io https://valheim.thunderstore.io https://cdn.thunderstore.io https://gcdn.thunderstore.io;"
     }
   },
   "plugins": {
@@ -58,7 +58,12 @@
       "all": true
     },
     "fs": {
-      "scope": ["**"]
+      "scope": [
+        "$APP/*",
+        "$APPDATA/deftheim/*",
+        "$HOME/.config/unity3d/IronGate/Valheim/*",
+        "$HOME/AppData/LocalLow/IronGate/Valheim/*"
+      ]
     },
     "http": {
       "scope": [

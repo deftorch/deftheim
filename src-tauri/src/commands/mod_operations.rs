@@ -11,6 +11,67 @@ use crate::state::AppState;
 use sha2::{Sha256, Digest};
 use futures::stream::{self, StreamExt};
 
+/// Validates mod_id to prevent path traversal
+fn validate_mod_id(mod_id: &str) -> Result<()> {
+    if mod_id.is_empty() {
+        return Err(AppError::Custom("Mod ID cannot be empty".into()));
+    }
+    // Check for suspicious characters that could indicate path traversal
+    if mod_id.contains("..") || mod_id.contains('/') || mod_id.contains('\\') {
+        return Err(AppError::Custom("Invalid Mod ID: Potential path traversal detected".into()));
+    }
+    Ok(())
+}
+
+/// Validates URL to ensure it points to a trusted domain
+fn validate_url(url: &str) -> Result<()> {
+    let trusted_domains = ["thunderstore.io", "gcdn.thunderstore.io"];
+    let parsed_url = url::Url::parse(url).map_err(|_| AppError::Custom("Invalid URL format".into()))?;
+
+    if let Some(domain) = parsed_url.domain() {
+        if trusted_domains.iter().any(|&d| domain == *d || domain.ends_with(&format!(".{}", d))) {
+            return Ok(());
+        }
+    }
+
+    Err(AppError::Custom(format!("URL domain not trusted: {}", url)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_mod_id() {
+        assert!(validate_mod_id("ValidModId").is_ok());
+        assert!(validate_mod_id("Valid-Mod-Id-1.0.0").is_ok());
+
+        // Path traversal attempts
+        assert!(validate_mod_id("../../../etc/passwd").is_err());
+        assert!(validate_mod_id("Mod/Id").is_err());
+        assert!(validate_mod_id("Mod\\Id").is_err());
+        assert!(validate_mod_id("..").is_err());
+
+        // Empty
+        assert!(validate_mod_id("").is_err());
+    }
+
+    #[test]
+    fn test_validate_url() {
+        assert!(validate_url("https://thunderstore.io/package/download/author/mod/1.0.0/").is_ok());
+        assert!(validate_url("https://gcdn.thunderstore.io/live/repository/packages/author-mod-1.0.0.zip").is_ok());
+        assert!(validate_url("https://subdomain.thunderstore.io/file").is_ok());
+
+        // Invalid domains
+        assert!(validate_url("https://evil.com/malware.zip").is_err());
+        assert!(validate_url("http://thunderstore.io.evil.com/file").is_err());
+        assert!(validate_url("https://evilthunderstore.io").is_err());
+
+        // Invalid URL format
+        assert!(validate_url("not_a_url").is_err());
+    }
+}
+
 #[derive(Debug, Deserialize)]
 struct Manifest {
     name: String,
@@ -32,6 +93,10 @@ pub async fn scan_mods(repository_path: String) -> Result<Vec<ModInfo>> {
     tracing::info!("Scanning mods in: {}", repository_path);
     let mut mods = Vec::new();
     let repo_path = Path::new(&repository_path);
+
+    // Basic path sanitization for repository_path?
+    // Usually repository_path comes from settings which user controls, but we should be careful.
+    // However, the main vulnerability is `mod_id` appending to it.
 
     if !repo_path.exists() {
         return Ok(vec![]);
@@ -99,6 +164,10 @@ fn verify_checksum(content: &[u8], expected_hash: &str) -> Result<()> {
 
 #[tauri::command]
 pub async fn install_mod(state: State<'_, AppState>, repository_path: String, mod_id: String, url: String) -> Result<()> {
+    validate_mod_id(&mod_id)?;
+    // Validate URL only if it's provided directly by user (which it is here)
+    validate_url(&url)?;
+
     // For single install, we treat it as an isolated call or entry point.
     // However, the original install_mod was recursive.
     // We should keep the original behavior for backward compatibility or simple use,
@@ -128,6 +197,8 @@ async fn install_mod_recursive_sequential(
     url: &str,
     visited: &mut std::collections::HashSet<String>
 ) -> Result<()> {
+    validate_mod_id(mod_id)?;
+
     if visited.contains(mod_id) {
         return Ok(());
     }
@@ -154,6 +225,9 @@ pub async fn install_single_mod(
     url: &str,
     expected_hash: Option<&str>
 ) -> Result<()> {
+    validate_mod_id(mod_id)?;
+    validate_url(url)?;
+
     let target_dir = Path::new(repository_path).join(mod_id);
     if !target_dir.exists() {
         tracing::info!("Downloading and installing mod: {} from {}", mod_id, url);
@@ -280,6 +354,7 @@ pub async fn install_mod_with_deps_parallel(
     repository_path: String,
     mod_id: String
 ) -> Result<()> {
+    validate_mod_id(&mod_id)?;
     tracing::info!("Starting parallel installation for: {}", mod_id);
 
     // First ensure the main mod is installed (to get its dependencies if not already in DB?)
@@ -326,6 +401,7 @@ pub async fn install_mod_with_deps_parallel(
 
 #[tauri::command]
 pub async fn uninstall_mod(repository_path: String, mod_id: String) -> Result<()> {
+    validate_mod_id(&mod_id)?;
     tracing::info!("Uninstalling mod: {}", mod_id);
     let target_dir = Path::new(&repository_path).join(&mod_id);
     if target_dir.exists() {
@@ -336,6 +412,7 @@ pub async fn uninstall_mod(repository_path: String, mod_id: String) -> Result<()
 
 #[tauri::command]
 pub async fn enable_mod(repository_path: String, game_plugins_path: String, mod_id: String) -> Result<()> {
+    validate_mod_id(&mod_id)?;
     tracing::info!("Enabling mod: {}", mod_id);
     let source_dir = Path::new(&repository_path).join(&mod_id);
     let target_dir = Path::new(&game_plugins_path).join(&mod_id);
@@ -365,6 +442,7 @@ pub async fn enable_mod(repository_path: String, game_plugins_path: String, mod_
 
 #[tauri::command]
 pub async fn disable_mod(game_plugins_path: String, mod_id: String) -> Result<()> {
+    validate_mod_id(&mod_id)?;
     tracing::info!("Disabling mod: {}", mod_id);
     let target_dir = Path::new(&game_plugins_path).join(&mod_id);
     if target_dir.exists() {

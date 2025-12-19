@@ -5,19 +5,19 @@ Checklist ini disusun berdasarkan temuan audit untuk memandu tim dalam menstabil
 ## ✅ Prioritas 1: Kritis (Timeline: 1-3 hari)
 **Kriteria:** Security vulnerabilities, critical bugs, data loss risks.
 
-- [ ] **[SECURITY] Sanitize `mod_id` input** di `mod_operations.rs`.
+- [x] **[SECURITY] Sanitize `mod_id` input** di `mod_operations.rs`.
     -   *Action*: Pastikan `mod_id` tidak mengandung `..`, `/`, atau `\` sebelum digunakan dalam `Path::join`.
-- [ ] **[SECURITY] Whitelist URL Download** di `install_mod`.
+- [x] **[SECURITY] Whitelist URL Download** di `install_mod`.
     -   *Action*: Validasi `url` harus dimulai dengan `https://gcdn.thunderstore.io/` atau domain terpercaya lainnya. Atau lebih baik, hapus parameter `url` dan biarkan backend mengambilnya dari DB.
-- [ ] **[SECURITY] Perketat Scope FS** di `tauri.conf.json`.
+- [x] **[SECURITY] Perketat Scope FS** di `tauri.conf.json`.
     -   *Action*: Ubah `fs: { scope: ["**"] }` menjadi scope spesifik (misal: `$APP/*`, `$APPDATA/Deftheim/*`, dan path instalasi Valheim yang dideteksi).
-- [ ] **[SECURITY] Implement Content Security Policy (CSP)** di `tauri.conf.json`.
+- [x] **[SECURITY] Implement Content Security Policy (CSP)** di `tauri.conf.json`.
     -   *Action*: Set `csp` string untuk membatasi script source ke `'self'` dan connect source ke Thunderstore.
 
 **Definition of Done untuk Priority 1:**
-- [ ] Semua celah Path Traversal tertutup (dibuktikan dengan test case gagal saat inject `../`).
-- [ ] Frontend tidak bisa lagi mengakses file sistem sembarangan (misal `/etc/passwd`).
-- [ ] `npm audit` dan `cargo audit` bersih.
+- [x] Semua celah Path Traversal tertutup (dibuktikan dengan test case gagal saat inject `../`).
+- [x] Frontend tidak bisa lagi mengakses file sistem sembarangan (misal `/etc/passwd`).
+- [x] `npm audit` dan `cargo audit` bersih.
 
 ## ✅ Prioritas 2: Fondasi (Timeline: 1-2 minggu)
 **Kriteria:** Architecture improvements, performance, type safety.
@@ -54,7 +54,7 @@ Checklist ini disusun berdasarkan temuan audit untuk memandu tim dalam menstabil
 - [ ] UX handling untuk kegagalan jaringan/disk lebih robust.
 
 ## Progress Tracking
-- **Priority 1:** ⬜ 0/4 completed
+- **Priority 1:** ✅ 4/4 completed
 - **Priority 2:** ⬜ 0/4 completed
 - **Priority 3:** ⬜ 0/4 completed
 
