@@ -78,7 +78,9 @@ export const modStore = {
       this.setMods(mods);
     } catch (err) {
       console.error("Failed to load mods:", err);
-      setModState("error", (err as Error).message);
+      const message = (err as Error).message;
+      setModState("error", message);
+      uiStore.showNotification(`Failed to load mods: ${message}`, "error");
       this.setMods([]);
     } finally {
       setModState("loading", false);
@@ -147,13 +149,14 @@ export const profileStore = {
   },
 
   setActiveProfile(id: string | null) {
-    // Deactivate all profiles
-    Object.keys(profileState.profiles).forEach((profileId) => {
-      setProfileState("profiles", profileId, "active", false);
-    });
+    const previousActive = profileState.activeProfileId;
 
-    // Activate selected profile
-    if (id) {
+    // Optimistic update: Only update the changed profiles
+    if (previousActive && previousActive !== id && profileState.profiles[previousActive]) {
+      setProfileState("profiles", previousActive, "active", false);
+    }
+
+    if (id && profileState.profiles[id]) {
       setProfileState("profiles", id, "active", true);
       setProfileState("activeProfileId", id);
     } else {
@@ -178,7 +181,9 @@ export const profileStore = {
       this.setProfiles(profiles);
     } catch (err) {
       console.error("Failed to load profiles:", err);
-      setProfileState("error", (err as Error).message);
+      const message = (err as Error).message;
+      setProfileState("error", message);
+      uiStore.showNotification(`Failed to load profiles: ${message}`, "error");
       this.setProfiles([]);
     } finally {
       setProfileState("loading", false);
@@ -191,8 +196,11 @@ export const profileStore = {
       const { tauriCommands } = await import("@lib/api/tauri");
       await tauriCommands.switchProfile(id);
       this.setActiveProfile(id);
+      uiStore.showNotification("Profile switched successfully", "success");
     } catch (err) {
-      setProfileState("error", (err as Error).message);
+      const message = (err as Error).message;
+      setProfileState("error", message);
+      uiStore.showNotification(`Failed to switch profile: ${message}`, "error");
       throw err;
     } finally {
       setProfileState("loading", false);
@@ -281,11 +289,15 @@ export const settingsStore = {
 interface UIState {
   sidebarCollapsed: boolean;
   currentPage: string;
+  globalError: string | null;
+  notification: { message: string; type: "info" | "success" | "warning" | "error" } | null;
 }
 
 const [uiState, setUIState] = createStore<UIState>({
   sidebarCollapsed: false,
-  currentPage: "/"
+  currentPage: "/",
+  globalError: null,
+  notification: null
 });
 
 export const uiStore = {
@@ -303,5 +315,20 @@ export const uiStore = {
 
   setCurrentPage(page: string) {
     setUIState("currentPage", page);
+  },
+
+  setGlobalError(error: string | null) {
+    setUIState("globalError", error);
+    if (error) {
+       // Auto-clear error after 5 seconds if desired, or let user dismiss
+    }
+  },
+
+  showNotification(message: string, type: "info" | "success" | "warning" | "error" = "info") {
+    setUIState("notification", { message, type });
+    // Auto-dismiss notification
+    setTimeout(() => {
+      setUIState("notification", null);
+    }, 3000);
   }
 };

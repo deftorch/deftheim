@@ -38,9 +38,40 @@
 
 ---
 
+## 🏗️ Architecture
+
+Deftheim uses a split-architecture approach ensuring security and performance:
+
+```mermaid
+graph TD
+    UI[Frontend (SolidJS)] <-->|IPC| Core[Backend (Rust/Tauri)]
+    Core <-->|SQL| DB[(SQLite)]
+    Core <-->|HTTPS| API[Thunderstore API]
+    Core <-->|FS| Game[Valheim Game Folder]
+
+    subgraph Frontend
+    UI --> Stores[Global Stores]
+    Stores --> Components
+    end
+
+    subgraph Backend
+    Core --> ModOps[Mod Operations]
+    Core --> ProfileOps[Profile Operations]
+    Core --> SystemOps[System Detection]
+    end
+```
+
 ## 🛠️ Development
 
 For detailed development instructions, please refer to [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+
+### Prerequisites
+
+- **Rust**: Latest stable version (install via rustup)
+- **Node.js**: LTS version (v18+)
+- **Build Tools**:
+  - Linux: `libwebkit2gtk-4.0-dev`, `build-essential`, `curl`, `wget`, `file`, `libssl-dev`, `libgtk-3-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`
+  - Windows: C++ Build Tools
 
 ### Tech Stack
 ```json
@@ -72,7 +103,7 @@ cd deftheim
 npm install
 
 # Run development server
-npm run tauri:dev
+npm run tauri dev
 ```
 
 ### Build for Production

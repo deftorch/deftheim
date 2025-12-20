@@ -39,24 +39,24 @@ Checklist ini disusun berdasarkan temuan audit untuk memandu tim dalam menstabil
 ## ✅ Prioritas 3: Peningkatan (Timeline: 1-4 minggu)
 **Kriteria:** Code quality improvements, documentation, UI polish.
 
-- [ ] **[CODE] Extract Types**.
+- [x] **[CODE] Extract Types**.
     -   *Action*: Pindahkan interface dari `stores.ts` ke `src/types/index.ts`.
-- [ ] **[CODE] Refactor Store State**.
+- [x] **[CODE] Refactor Store State**.
     -   *Action*: Optimalkan `setActiveProfile` untuk menghindari loop O(N).
-- [ ] **[DOCS] Lengkapi README & CONTRIBUTING**.
+- [x] **[DOCS] Lengkapi README & CONTRIBUTING**.
     -   *Action*: Tambahkan instruksi setup environment yang jelas dan arsitektur diagram.
-- [ ] **[UX] Error Handling**.
+- [x] **[UX] Error Handling**.
     -   *Action*: Tampilkan pesan error yang lebih user-friendly di UI jika install gagal (bukan sekadar console log).
 
 **Definition of Done untuk Priority 3:**
-- [ ] Struktur kode lebih terorganisir.
-- [ ] Dokumentasi lengkap untuk onboard developer baru < 30 menit.
-- [ ] UX handling untuk kegagalan jaringan/disk lebih robust.
+- [x] Struktur kode lebih terorganisir.
+- [x] Dokumentasi lengkap untuk onboard developer baru < 30 menit.
+- [x] UX handling untuk kegagalan jaringan/disk lebih robust.
 
 ## Progress Tracking
 - **Priority 1:** ✅ 4/4 completed
 - **Priority 2:** ✅ 4/4 completed
-- **Priority 3:** ⬜ 0/4 completed
+- **Priority 3:** ✅ 4/4 completed
 
 ## Notes
 - Perbaikan Priority 1 adalah **BLOCKER** untuk rilis Beta/Public.
