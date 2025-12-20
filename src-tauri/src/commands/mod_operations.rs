@@ -11,6 +11,81 @@ use crate::state::AppState;
 use sha2::{Sha256, Digest};
 use futures::stream::{self, StreamExt};
 
+/// Validates mod_id to prevent path traversal
+fn validate_mod_id(mod_id: &str) -> Result<()> {
+    if mod_id.is_empty() {
+        return Err(AppError::Custom("Mod ID cannot be empty".into()));
+    }
+    // Check for suspicious characters that could indicate path traversal
+    if mod_id.contains("..") || mod_id.contains('/') || mod_id.contains('\\') {
+        return Err(AppError::Custom("Invalid Mod ID: Potential path traversal detected".into()));
+    }
+    Ok(())
+}
+
+/// Validates URL to ensure it points to a trusted domain
+fn validate_url(url: &str) -> Result<()> {
+    let trusted_domains = ["thunderstore.io", "gcdn.thunderstore.io"];
+    let parsed_url = url::Url::parse(url).map_err(|_| AppError::Custom("Invalid URL format".into()))?;
+
+    if let Some(domain) = parsed_url.domain() {
+        if trusted_domains.iter().any(|&d| domain == *d || domain.ends_with(&format!(".{}", d))) {
+            return Ok(());
+        }
+    }
+
+    Err(AppError::Custom(format!("URL domain not trusted: {}", url)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sha2::{Digest, Sha256};
+
+    #[test]
+    fn test_validate_mod_id() {
+        assert!(validate_mod_id("ValidModId").is_ok());
+        assert!(validate_mod_id("Valid-Mod-Id-1.0.0").is_ok());
+
+        // Path traversal attempts
+        assert!(validate_mod_id("../../../etc/passwd").is_err());
+        assert!(validate_mod_id("Mod/Id").is_err());
+        assert!(validate_mod_id("Mod\\Id").is_err());
+        assert!(validate_mod_id("..").is_err());
+
+        // Empty
+        assert!(validate_mod_id("").is_err());
+    }
+
+    #[test]
+    fn test_validate_url() {
+        assert!(validate_url("https://thunderstore.io/package/download/author/mod/1.0.0/").is_ok());
+        assert!(validate_url("https://gcdn.thunderstore.io/live/repository/packages/author-mod-1.0.0.zip").is_ok());
+        assert!(validate_url("https://subdomain.thunderstore.io/file").is_ok());
+
+        // Invalid domains
+        assert!(validate_url("https://evil.com/malware.zip").is_err());
+        assert!(validate_url("http://thunderstore.io.evil.com/file").is_err());
+        assert!(validate_url("https://evilthunderstore.io").is_err());
+
+        // Invalid URL format
+        assert!(validate_url("not_a_url").is_err());
+    }
+
+    #[test]
+    fn test_verify_checksum() {
+        let content = b"test content";
+        let mut hasher = Sha256::new();
+        hasher.update(content);
+        let correct_hash = hex::encode(hasher.finalize());
+        let wrong_hash = "0000000000000000000000000000000000000000000000000000000000000000";
+
+        assert!(verify_checksum(content, &correct_hash).is_ok());
+        assert!(verify_checksum(content, wrong_hash).is_err());
+        assert!(verify_checksum(content, "").is_ok()); // Optional check skipped
+    }
+}
+
 #[derive(Debug, Deserialize)]
 struct Manifest {
     name: String,
@@ -30,54 +105,59 @@ pub async fn get_thunderstore_mods(state: State<'_, AppState>) -> Result<Vec<Mod
 #[tauri::command]
 pub async fn scan_mods(repository_path: String) -> Result<Vec<ModInfo>> {
     tracing::info!("Scanning mods in: {}", repository_path);
-    let mut mods = Vec::new();
-    let repo_path = Path::new(&repository_path);
+    let repo_path = repository_path.clone();
 
-    if !repo_path.exists() {
-        return Ok(vec![]);
-    }
+    // Offload blocking IO to a separate thread
+    let mods = tauri::async_runtime::spawn_blocking(move || {
+        let mut mods = Vec::new();
+        let path = Path::new(&repo_path);
 
-    // We expect each folder in repository_path to be a mod folder
-    for entry in std::fs::read_dir(repo_path)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_dir() {
-            let manifest_path = path.join("manifest.json");
-            if manifest_path.exists() {
-                if let Ok(content) = fs::read_to_string(&manifest_path) {
-                    if let Ok(manifest) = serde_json::from_str::<Manifest>(&content) {
-                        let id = path.file_name().unwrap().to_string_lossy().to_string();
-                        // Try to parse author from ID (Author-Name-Version) or just directory name
-                        // This is heuristic.
-                        let parts: Vec<&str> = id.split('-').collect();
-                        let author = if parts.len() >= 2 { parts[0].to_string() } else { "Unknown".to_string() };
+        if !path.exists() {
+            return Ok(vec![]);
+        }
 
-                        // Calculate size
-                        let size = WalkDir::new(&path).into_iter().filter_map(|e| e.ok()).map(|e| e.metadata().map(|m| m.len()).unwrap_or(0)).sum();
+        // We expect each folder in repository_path to be a mod folder
+        for entry in std::fs::read_dir(path)? {
+            let entry = entry?;
+            let mod_dir_path = entry.path();
+            if mod_dir_path.is_dir() {
+                let manifest_path = mod_dir_path.join("manifest.json");
+                if manifest_path.exists() {
+                    if let Ok(content) = fs::read_to_string(&manifest_path) {
+                        if let Ok(manifest) = serde_json::from_str::<Manifest>(&content) {
+                            let id = mod_dir_path.file_name().unwrap().to_string_lossy().to_string();
+                            // Try to parse author from ID (Author-Name-Version) or just directory name
+                            let parts: Vec<&str> = id.split('-').collect();
+                            let author = if parts.len() >= 2 { parts[0].to_string() } else { "Unknown".to_string() };
 
-                        mods.push(ModInfo {
-                            id: id.clone(),
-                            name: manifest.name,
-                            version: manifest.version_number,
-                            author,
-                            description: manifest.description.unwrap_or_default(),
-                            icon: None, // TODO: Load icon.png if exists
-                            size,
-                            installed: true,
-                            enabled: false, // This depends on profile, scan_mods just lists repo?
-                            dependencies: manifest.dependencies.unwrap_or_default(),
-                            categories: vec![],
-                            download_url: None,
-                            website_url: manifest.website_url,
-                            rating: None,
-                            downloads: None,
-                            last_updated: String::new(), // Metadata doesn't have this
-                        });
+                            // Calculate size
+                            let size = WalkDir::new(&mod_dir_path).into_iter().filter_map(|e| e.ok()).map(|e| e.metadata().map(|m| m.len()).unwrap_or(0)).sum();
+
+                            mods.push(ModInfo {
+                                id: id.clone(),
+                                name: manifest.name,
+                                version: manifest.version_number,
+                                author,
+                                description: manifest.description.unwrap_or_default(),
+                                icon: None, // TODO: Load icon.png if exists
+                                size,
+                                installed: true,
+                                enabled: false, // This depends on profile, scan_mods just lists repo?
+                                dependencies: manifest.dependencies.unwrap_or_default(),
+                                categories: vec![],
+                                download_url: None,
+                                website_url: manifest.website_url,
+                                rating: None,
+                                downloads: None,
+                                last_updated: String::new(), // Metadata doesn't have this
+                            });
+                        }
                     }
                 }
             }
         }
-    }
+        Ok::<Vec<ModInfo>, std::io::Error>(mods)
+    }).await.map_err(|e| AppError::Custom(format!("Task join error: {}", e)))??;
 
     Ok(mods)
 }
@@ -99,6 +179,10 @@ fn verify_checksum(content: &[u8], expected_hash: &str) -> Result<()> {
 
 #[tauri::command]
 pub async fn install_mod(state: State<'_, AppState>, repository_path: String, mod_id: String, url: String) -> Result<()> {
+    validate_mod_id(&mod_id)?;
+    // Validate URL only if it's provided directly by user (which it is here)
+    validate_url(&url)?;
+
     // For single install, we treat it as an isolated call or entry point.
     // However, the original install_mod was recursive.
     // We should keep the original behavior for backward compatibility or simple use,
@@ -128,6 +212,8 @@ async fn install_mod_recursive_sequential(
     url: &str,
     visited: &mut std::collections::HashSet<String>
 ) -> Result<()> {
+    validate_mod_id(mod_id)?;
+
     if visited.contains(mod_id) {
         return Ok(());
     }
@@ -146,7 +232,8 @@ async fn install_mod_recursive_sequential(
     Ok(())
 }
 
-// New helper for single mod installation
+/// Core installation logic used by both sequential and parallel installers.
+/// Downloads, verifies, extracts, and registers the mod.
 pub async fn install_single_mod(
     state: &AppState,
     repository_path: &str,
@@ -154,6 +241,9 @@ pub async fn install_single_mod(
     url: &str,
     expected_hash: Option<&str>
 ) -> Result<()> {
+    validate_mod_id(mod_id)?;
+    validate_url(url)?;
+
     let target_dir = Path::new(repository_path).join(mod_id);
     if !target_dir.exists() {
         tracing::info!("Downloading and installing mod: {} from {}", mod_id, url);
@@ -280,6 +370,7 @@ pub async fn install_mod_with_deps_parallel(
     repository_path: String,
     mod_id: String
 ) -> Result<()> {
+    validate_mod_id(&mod_id)?;
     tracing::info!("Starting parallel installation for: {}", mod_id);
 
     // First ensure the main mod is installed (to get its dependencies if not already in DB?)
@@ -326,6 +417,7 @@ pub async fn install_mod_with_deps_parallel(
 
 #[tauri::command]
 pub async fn uninstall_mod(repository_path: String, mod_id: String) -> Result<()> {
+    validate_mod_id(&mod_id)?;
     tracing::info!("Uninstalling mod: {}", mod_id);
     let target_dir = Path::new(&repository_path).join(&mod_id);
     if target_dir.exists() {
@@ -336,6 +428,7 @@ pub async fn uninstall_mod(repository_path: String, mod_id: String) -> Result<()
 
 #[tauri::command]
 pub async fn enable_mod(repository_path: String, game_plugins_path: String, mod_id: String) -> Result<()> {
+    validate_mod_id(&mod_id)?;
     tracing::info!("Enabling mod: {}", mod_id);
     let source_dir = Path::new(&repository_path).join(&mod_id);
     let target_dir = Path::new(&game_plugins_path).join(&mod_id);
@@ -365,6 +458,7 @@ pub async fn enable_mod(repository_path: String, game_plugins_path: String, mod_
 
 #[tauri::command]
 pub async fn disable_mod(game_plugins_path: String, mod_id: String) -> Result<()> {
+    validate_mod_id(&mod_id)?;
     tracing::info!("Disabling mod: {}", mod_id);
     let target_dir = Path::new(&game_plugins_path).join(&mod_id);
     if target_dir.exists() {
